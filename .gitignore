@@ -1,0 +1,31 @@
+# Environment & secrets
+.env
+*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Ruff & mypy cache
+.ruff_cache/
+.mypy_cache/
+
+# macOS
+.DS_Store
+
+# GCP credentials (belt-and-suspenders)
+*-key.json
+application_default_credentials.json
