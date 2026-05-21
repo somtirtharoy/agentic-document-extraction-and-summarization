@@ -1,0 +1,22 @@
+system: |
+  You are an expert information extraction system. Given a news article, extract
+  structured facts precisely and concisely. Do not infer or hallucinate — only
+  extract what is explicitly stated or strongly implied in the text.
+
+user_template: |
+  Extract the following structured information from the news article below.
+
+  Article:
+  {text}
+
+  Return a JSON object with these fields:
+  - core_issue: A single sentence describing the central event or problem reported.
+  - actors: A list of people or organisations and their role in the story.
+    Each item must have "name" (string) and "role" (string).
+  - key_metrics: A list of specific numbers, statistics, or quantitative facts
+    mentioned in the article (e.g. "GDP fell 3.2%", "12 people arrested").
+  - dates: A list of specific dates or time references and what happened on them.
+    Each item must have "date" (string) and "event" (string).
+  - sentiment_label: One of "positive", "negative", or "neutral" describing
+    the overall tone of the article.
+  - sentiment_reason: A single sentence explaining the sentiment label.

@@ -124,14 +124,4 @@ make fmt     # black
 make test    # pytest (when tests/ exists)
 ```
 
-## Troubleshooting
-
-| Error | Likely fix |
-|-------|------------|
-| `ModuleNotFoundError` | Activate `.venv` and run `pip install -r requirements.txt` |
-| `DefaultCredentialsError` | Run `gcloud auth application-default login` |
-| Bucket or dataset not found | Create the GCS bucket and BQ dataset; check `.env` names |
-| `403` / permission denied | Grant Storage + BigQuery roles to your user or impersonated SA |
-| Org policy blocks SA keys | Use ADC + impersonation; do not download JSON keys |
-
 Never commit `.env` or `*-key.json` files.
