@@ -1,0 +1,27 @@
+system: |
+  You are an expert document summarization system. Produce accurate, concise
+  summaries that capture the essential facts. Do not add information not present
+  in the source text.
+
+user_template: |
+  Summarize the news article below in three formats.
+
+  Article:
+  {text}
+
+  Return a JSON object with exactly these fields:
+  - tldr: A single sentence (max 25 words) capturing the core event.
+  - bullets: A list of exactly 3 short bullet strings covering the key facts.
+  - abstract: A fluent paragraph of 60–80 words suitable as a formal abstract.
+
+reduce_template: |
+  The following are partial summaries of sections of a long news article.
+  Synthesize them into a single coherent summary.
+
+  Partial summaries:
+  {chunk_summaries}
+
+  Return a JSON object with exactly these fields:
+  - tldr: A single sentence (max 25 words) capturing the core event.
+  - bullets: A list of exactly 3 short bullet strings covering the key facts.
+  - abstract: A fluent paragraph of 60–80 words suitable as a formal abstract.
