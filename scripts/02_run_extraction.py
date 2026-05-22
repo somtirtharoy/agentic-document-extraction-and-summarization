@@ -8,13 +8,13 @@ Usage:
 import argparse
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from tqdm import tqdm
 
 from src.data.schema import ENTITIES_SCHEMA, EXTRACTIONS_GEMINI_SCHEMA
-from src.extraction.gemini_extractor import GeminiExtractor
 from src.extraction.gcp_nl_extractor import GCPNLExtractor
+from src.extraction.gemini_extractor import GeminiExtractor
 from src.gcp.bq_client import BQClient
 from src.utils.logging import get_logger
 
@@ -35,7 +35,7 @@ def _extract_one(
     """Run all extractors on a single document. Returns (entity_rows, gemini_row)."""
     doc_id = row["doc_id"]
     text = row["text"]
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     entity_rows: list[dict] = []
     gemini_row: dict | None = None

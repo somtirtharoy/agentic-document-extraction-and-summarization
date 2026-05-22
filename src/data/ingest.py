@@ -1,6 +1,5 @@
-import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from datasets import load_dataset
 from tqdm import tqdm
@@ -24,7 +23,7 @@ def _normalize_record(row: dict, source: str) -> dict:
         "text": row["article"].strip(),
         "reference_summary": row["highlights"].strip(),
         "source": source,
-        "ingested_at": datetime.now(timezone.utc).isoformat(),
+        "ingested_at": datetime.now(UTC).isoformat(),
     }
 
 

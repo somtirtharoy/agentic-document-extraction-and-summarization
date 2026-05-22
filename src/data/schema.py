@@ -44,3 +44,22 @@ EXTRACTIONS_GEMINI_SCHEMA: list[SchemaField] = [
     SchemaField("sentiment_reason", "STRING", mode="NULLABLE"),
     SchemaField("extracted_at", "TIMESTAMP", mode="REQUIRED"),
 ]
+
+# ── Phase 3: summarization ────────────────────────────────────────────────────
+
+SUMMARIES_SCHEMA: list[SchemaField] = [
+    SchemaField("doc_id", "STRING", mode="REQUIRED"),
+    SchemaField("tldr", "STRING", mode="NULLABLE"),
+    SchemaField("bullets", "STRING", mode="NULLABLE"),   # JSON-encoded list[str]
+    SchemaField("abstract", "STRING", mode="NULLABLE"),
+    SchemaField("summarized_at", "TIMESTAMP", mode="REQUIRED"),
+]
+
+EVALUATION_RESULTS_SCHEMA: list[SchemaField] = [
+    SchemaField("doc_id", "STRING", mode="REQUIRED"),
+    SchemaField("model", "STRING", mode="REQUIRED"),     # "gemini" | "textrank"
+    SchemaField("rouge1", "FLOAT", mode="REQUIRED"),
+    SchemaField("rouge2", "FLOAT", mode="REQUIRED"),
+    SchemaField("rougeL", "FLOAT", mode="REQUIRED"),
+    SchemaField("evaluated_at", "TIMESTAMP", mode="REQUIRED"),
+]
