@@ -5,13 +5,15 @@ import yaml
 from vertexai.generative_models import (
     Content,
     GenerationConfig,
+    GenerativeModel,
     Part,
 )
 
+from config.settings import get_settings
 from src.agent.memory import AgentMemory
 from src.agent.schemas import TOOL_DECLARATIONS
 from src.agent.tools import AgentTools
-from src.gcp.vertex_client import get_model
+from src.gcp.vertex_client import _ensure_init
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -66,9 +68,11 @@ class Planner:
     ) -> None:
         self._tools = tools
         self._memory = memory
-        self._model = get_model()
-        self._system_prompt = _load_system_prompt()
-        self._generation_config = GenerationConfig(temperature=0.2, max_output_tokens=2048)
+        _ensure_init()
+        settings = get_settings()
+        system_prompt = _load_system_prompt()
+        self._model = GenerativeModel(settings.gemini_model, system_instruction=system_prompt)
+        self._generation_config = GenerationConfig(temperature=0.2, max_output_tokens=4096)
         self._trace_callback = trace_callback  # called each step for REPL trace output
 
     def run(self, session_id: str, user_message: str) -> str:
@@ -85,7 +89,6 @@ class Planner:
                 contents,
                 generation_config=self._generation_config,
                 tools=[TOOL_DECLARATIONS],
-                system_instruction=self._system_prompt,
             )
 
             candidate = response.candidates[0]
@@ -101,7 +104,7 @@ class Planner:
 
                 logger.info(
                     "Agent tool call",
-                    extra={"step": step, "tool": tool_name, "args": tool_args},
+                    extra={"step": step, "tool": tool_name, "tool_args": tool_args},
                 )
 
                 # Execute the tool

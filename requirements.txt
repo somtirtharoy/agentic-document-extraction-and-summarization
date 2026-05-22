@@ -9,6 +9,7 @@ google-auth==2.40.1
 # Data & ML
 datasets==3.5.0
 pandas==2.2.3
+pandas-gbq==0.35.0
 langdetect==1.0.9
 rouge-score==0.1.2
 

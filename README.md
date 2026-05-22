@@ -346,6 +346,48 @@ make test    # pytest tests/
 
 **Pre-commit hooks** (installed via `make setup`) run ruff, black, and a private-key detector on every commit.
 
+### Running the test suite
+
+The tests use mocked GCP clients — no live GCP credentials required.
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with verbose output
+pytest tests/ -v
+
+# Run a specific test module
+pytest tests/test_preprocess.py -v
+
+# Run a specific test class or case
+pytest tests/test_agent_tools.py::TestAggregateEntities -v
+pytest tests/test_evaluator.py::TestEvaluator::test_identical_text_scores_perfect -v
+
+# Stop on first failure
+pytest tests/ -x
+
+# Show coverage summary (requires pytest-cov)
+pytest tests/ --cov=src --cov-report=term-missing
+```
+
+**Test layout:**
+
+| Module | What it covers |
+|---|---|
+| `test_preprocess.py` | Whitespace normalisation, token counting, SHA-256, language detection, `_clean_record` boundary cases |
+| `test_extraction_models.py` | Pydantic model defaults, validation, nested construction |
+| `test_schema_helper.py` | `_pydantic_to_vertex_schema` — `$ref` inlining, title stripping, mutation safety |
+| `test_evaluator.py` | ROUGE-1/2/L scoring, corpus averaging, edge cases |
+| `test_agent_schemas.py` | Input schema validation — bounds on `top_k`, `top_n`, `style` enum |
+| `test_bq_client.py` | `table_ref`, `insert_rows` error propagation, `query` result mapping |
+| `test_gcs_client.py` | JSONL upload format, `blob_exists` |
+| `test_agent_memory.py` | Delegation to `FirestoreClient`, cache hit/miss |
+| `test_agent_tools.py` | All 5 agent tools — cache paths, BQ error paths, aggregation logic |
+| `test_planner.py` | `_history_to_contents` for all role types, `Planner` constructor |
+
+All 138 tests pass with no live GCP calls.
+
 **Cost tips:**
 - Use `--limit 50` on first runs to verify GCP connectivity before full-scale processing
 - Gemini Flash is used for bulk extraction/summarization; Pro is reserved for the agent planner

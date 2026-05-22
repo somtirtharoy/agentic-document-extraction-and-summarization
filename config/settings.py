@@ -1,11 +1,14 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_ENV_FILE = Path(__file__).parents[1] / ".env"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -22,8 +25,8 @@ class Settings(BaseSettings):
     impersonate_sa: str | None = None
 
     # Gemini model identifiers (referenced later in extraction / summarization)
-    gemini_model: str = "gemini-1.5-pro"
-    gemini_model_flash: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-2.5-pro"
+    gemini_model_flash: str = "gemini-2.5-flash"
     embedding_model: str = "text-embedding-004"
 
 
