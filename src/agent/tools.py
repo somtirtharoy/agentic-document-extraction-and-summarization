@@ -1,6 +1,5 @@
 import json
 from collections import Counter, defaultdict
-from typing import Any
 
 from config.settings import get_settings
 from src.agent.memory import AgentMemory
@@ -11,8 +10,8 @@ from src.agent.schemas import (
     SearchDocumentsInput,
     SummarizeDocumentInput,
 )
-from src.extraction.gemini_extractor import GeminiExtractor
 from src.extraction.gcp_nl_extractor import GCPNLExtractor
+from src.extraction.gemini_extractor import GeminiExtractor
 from src.gcp.bq_client import BQClient
 from src.gcp.vertex_client import get_model
 from src.summarization.gemini_summarizer import GeminiSummarizer
@@ -58,7 +57,7 @@ class AgentTools:
                 ORDER BY score DESC
                 LIMIT @top_k
             """
-            from google.cloud.bigquery import ScalarQueryParameter, QueryParameterValue
+            from google.cloud.bigquery import ScalarQueryParameter
             params = [
                 ScalarQueryParameter("query", "STRING", args.query),
                 ScalarQueryParameter("top_k", "INT64", args.top_k),

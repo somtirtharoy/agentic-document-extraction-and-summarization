@@ -1,5 +1,5 @@
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 from src.agent.memory import AgentMemory
 from src.agent.planner import Planner

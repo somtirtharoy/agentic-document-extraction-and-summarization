@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from google.cloud import firestore
@@ -38,7 +38,7 @@ class FirestoreClient:
             {
                 "role": role,
                 "content": content if isinstance(content, str) else str(content),
-                "ts": datetime.now(timezone.utc),
+                "ts": datetime.now(UTC),
             }
         )
 
@@ -54,7 +54,7 @@ class FirestoreClient:
                 "tool_name": tool_name,
                 "args": args,
                 "observation": observation,
-                "ts": datetime.now(timezone.utc),
+                "ts": datetime.now(UTC),
             }
         )
 

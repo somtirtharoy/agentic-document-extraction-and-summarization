@@ -17,7 +17,6 @@ import json
 
 from src.agent.agent import Agent
 
-
 # ── Trace display ─────────────────────────────────────────────────────────────
 
 def _fmt_observation(obs: dict) -> str:
@@ -61,9 +60,9 @@ def main() -> None:
     print("  Research Insight Agent — Interactive Demo")
     print(f"{'='*60}")
     print(f"  Session ID : {session_id}")
-    print(f"  Type 'quit' or 'exit' to end the session.")
-    print(f"  Type 'samples' to see example queries.")
-    print(f"  Type 'session' to print the current session ID.")
+    print("  Type 'quit' or 'exit' to end the session.")
+    print("  Type 'samples' to see example queries.")
+    print("  Type 'session' to print the current session ID.")
     print(f"{'='*60}\n")
 
     while True:

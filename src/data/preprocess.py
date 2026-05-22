@@ -1,7 +1,7 @@
 import hashlib
 import re
 
-from langdetect import detect, LangDetectException
+from langdetect import LangDetectException, detect
 from tqdm import tqdm
 
 from src.data.schema import DOCUMENTS_CLEAN_SCHEMA

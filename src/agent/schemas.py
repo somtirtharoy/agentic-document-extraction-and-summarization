@@ -1,7 +1,7 @@
 from typing import Literal
+
 from pydantic import BaseModel, Field
 from vertexai.generative_models import FunctionDeclaration, Tool
-
 
 # ── Tool input schemas (validated before execution) ───────────────────────────
 

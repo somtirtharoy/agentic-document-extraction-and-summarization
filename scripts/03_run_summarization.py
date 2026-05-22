@@ -8,7 +8,7 @@ Usage:
 import argparse
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 from tqdm import tqdm
@@ -33,7 +33,7 @@ def _summarize_one(row: dict, summarizer: GeminiSummarizer) -> dict | None:
             "tldr": result.tldr,
             "bullets": json.dumps(result.bullets),
             "abstract": result.abstract,
-            "summarized_at": datetime.now(timezone.utc).isoformat(),
+            "summarized_at": datetime.now(UTC).isoformat(),
         }
     except Exception as exc:
         logger.error("Summarization failed", extra={"doc_id": doc_id, "error": str(exc)})

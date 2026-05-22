@@ -7,7 +7,7 @@ Usage:
     python -m scripts.04_run_evaluation --sample 100
 """
 import argparse
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 from tqdm import tqdm
@@ -53,7 +53,7 @@ def main() -> None:
     references: list[str] = []
     doc_ids: list[str] = []
     eval_rows: list[dict] = []
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     print(f"{'='*55}")
     print(" Running summarizers...")
