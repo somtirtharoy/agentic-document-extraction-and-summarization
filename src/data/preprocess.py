@@ -4,7 +4,6 @@ import re
 from langdetect import detect, LangDetectException
 from tqdm import tqdm
 
-from config.settings import get_settings
 from src.data.schema import DOCUMENTS_CLEAN_SCHEMA
 from src.gcp.bq_client import BQClient
 from src.utils.logging import get_logger
@@ -67,7 +66,6 @@ def run() -> tuple[int, int]:
 
     Returns (rows_in, rows_out).
     """
-    settings = get_settings()
     bq = BQClient()
 
     sql = f"SELECT * FROM `{bq.table_ref(BQ_SOURCE_TABLE)}`"

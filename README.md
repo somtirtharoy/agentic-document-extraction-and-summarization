@@ -1,127 +1,409 @@
-# Agentic Document Extraction and Summarization
+# Agentic Document Extraction & Summarization
 
-Prototype pipeline for ingesting news articles, storing them on GCP, and (in later steps) extracting entities and generating summaries with Vertex AI.
+A GCP-native prototype that ingests a news corpus, extracts structured entities, generates multi-style summaries, and exposes these capabilities to an autonomous AI agent that answers natural-language analytical questions with cited sources.
 
-## Prerequisites
+**Stack:** Vertex AI (Gemini 1.5 Pro) · Cloud Natural Language API · BigQuery · Cloud Storage · Firestore · Python 3.11+
 
-- Python 3.11+
-- A GCP project with billing enabled
-- [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) (`gcloud` CLI)
-- GCS bucket and BigQuery dataset created in your project (see below)
+---
 
-### GCP resources
+## Table of Contents
 
-Create these once in your project (Console or `gcloud`):
+1. [GCP Setup](#1-gcp-setup)
+2. [Local Setup](#2-local-setup)
+3. [Running the Pipeline](#3-running-the-pipeline)
+4. [Agent Demo](#4-agent-demo)
+5. [Development](#5-development)
+6. [Project Structure](#6-project-structure)
 
-| Resource | Example name |
-|----------|----------------|
-| GCS bucket | `your-project-id-nlp-corpus` |
-| BigQuery dataset | `nlp_demo` |
+---
 
-Your identity (user account or service account via impersonation) needs at least:
+## 1. GCP Setup
 
-- Storage Object Admin
-- BigQuery Data Editor
-- BigQuery Job User
+Complete these steps once before running anything locally.
 
-### Authentication (no JSON key file)
+### 1.1 Create or select a GCP project
 
-Many organizations block service account key downloads. Use **Application Default Credentials** instead:
+Go to [console.cloud.google.com](https://console.cloud.google.com), create a project (e.g. `agentic-nlp-demo`), and enable billing.
+
+### 1.2 Enable required APIs
+
+In **APIs & Services → Enable APIs**, enable the following (or run the `gcloud` command below):
+
+| API | Purpose |
+|---|---|
+| Vertex AI API | Gemini models, embeddings |
+| Cloud Natural Language API | Entity extraction, sentiment |
+| Cloud Storage API | Raw data landing zone |
+| BigQuery API | Structured document/entity/summary store |
+| Cloud Firestore API | Agent session memory and doc cache |
+| Cloud Build API | CI/CD (productionization) |
+| Cloud Run API | Agent serving (productionization) |
+| Cloud Pub/Sub API | Event-driven ingestion (productionization) |
 
 ```bash
-gcloud auth application-default login
+gcloud services enable \
+  aiplatform.googleapis.com \
+  language.googleapis.com \
+  storage.googleapis.com \
+  bigquery.googleapis.com \
+  firestore.googleapis.com \
+  cloudbuild.googleapis.com \
+  run.googleapis.com \
+  pubsub.googleapis.com \
+  --project=YOUR_PROJECT_ID
 ```
 
-To run as a service account without a key file:
+### 1.3 Create a service account
+
+In **IAM & Admin → Service Accounts**, create `agentic-nlp-sa` and grant it these roles:
+
+| Role | Why |
+|---|---|
+| Storage Object Admin | Read/write GCS bucket |
+| BigQuery Data Editor | Read/write BQ tables |
+| BigQuery Job User | Run BQ queries |
+| Vertex AI User | Gemini, embeddings, Vertex AI APIs |
+| Cloud Datastore User | Read/write Firestore |
+
+> **Note:** Service account key downloads are blocked in many organisations. This project uses Application Default Credentials — no JSON key file needed (see §1.5).
+
+### 1.4 Create GCP resources
+
+**GCS bucket** (Console: Cloud Storage → Create, or):
+```bash
+gsutil mb -l us-central1 gs://YOUR_PROJECT_ID-nlp-corpus/
+```
+
+**BigQuery dataset** (Console: BigQuery → Create dataset, or):
+```bash
+bq --location=us-central1 mk --dataset YOUR_PROJECT_ID:nlp_demo
+```
+
+**Firestore** (Console: Firestore → Create database):
+- Mode: **Native**
+- Location: `us-central1`
+
+> All three resources must be in the same region (`us-central1`) to avoid cross-region egress charges.
+
+### 1.5 Authenticate locally
+
+This project uses **Application Default Credentials (ADC)** — no service account key file required:
+
+```bash
+# Authenticate your personal Google account
+gcloud auth login
+
+# Set your active project
+gcloud config set project YOUR_PROJECT_ID
+
+# Generate ADC credentials used by Google client libraries
+gcloud auth application-default login
+
+# Set the quota project (required for Vertex AI billing attribution)
+gcloud auth application-default set-quota-project YOUR_PROJECT_ID
+```
+
+To run as the service account without a key file (optional, for testing exact SA permissions):
 
 ```bash
 gcloud auth application-default login \
   --impersonate-service-account=agentic-nlp-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
 ```
 
-Do **not** set `GOOGLE_APPLICATION_CREDENTIALS` unless you have a local key file.
+---
 
-## Setup
-
-From the repository root:
+## 2. Local Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+# Clone and enter the repo
+git clone <repo-url>
+cd agentic-document-extraction-and-summarization
 
+# Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+# Install all dependencies
 pip install -r requirements.txt
-pre-commit install            # optional
+
+# Install spaCy language model (used by the optional baseline extractor)
+python -m spacy download en_core_web_sm
+
+# Install pre-commit hooks (optional but recommended)
+pre-commit install
 ```
 
-Copy the environment template and fill in your project values:
+Or use the Makefile shortcut:
+```bash
+make setup
+```
+
+### Configure environment
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` with your real values:
 
 ```env
 GCP_PROJECT_ID=your-project-id
 GCP_REGION=us-central1
 GCS_BUCKET=your-project-id-nlp-corpus
 BQ_DATASET=nlp_demo
+
+# Authentication is handled by ADC — no key file needed.
+# Run once: gcloud auth application-default login
 ```
 
-Or run the Makefile setup target (also installs spaCy for later baseline scripts):
+> `.env` is git-ignored. Never commit it. Never commit `*.json` key files.
 
-```bash
-make setup
-```
+---
 
-## Run
+## 3. Running the Pipeline
 
 All commands assume the virtualenv is active and you are in the repo root.
+Run scripts in order — each step depends on the previous one.
 
-### Step 1 — Ingest and preprocess (implemented)
+### Step 1 — Ingest & Preprocess
 
-Downloads [CNN/DailyMail](https://huggingface.co/datasets/cnn_dailymail) from HuggingFace, uploads JSONL to GCS, loads the `documents` table in BigQuery, then cleans and deduplicates into `documents_clean`.
-
-```bash
-python -m scripts.01_ingest_data
-```
-
-Smaller test run (faster, fewer API calls):
+Downloads [CNN/DailyMail](https://huggingface.co/datasets/cnn_dailymail) from HuggingFace, uploads raw JSONL to GCS, loads into BigQuery, then cleans and deduplicates.
 
 ```bash
-python -m scripts.01_ingest_data --limit 50
+python -m scripts.01_ingest_data              # default: 1500 docs
+python -m scripts.01_ingest_data --limit 200  # quick smoke test
 ```
 
-Same via Make (default limit 1500):
+**What happens:**
+1. HuggingFace → `gs://<GCS_BUCKET>/raw/documents.jsonl`
+2. GCS → BigQuery `nlp_demo.documents` (raw)
+3. Clean (English only, 100–5000 tokens, dedupe by SHA-256) → BigQuery `nlp_demo.documents_clean`
+
+**Output:**
+```
+Ingested  : 1,500 documents
+After clean: 1,423 documents
+Dropped   : 77 documents
+```
+
+---
+
+### Step 2 — Extract Entities
+
+Runs Cloud Natural Language API + Gemini structured extraction on cleaned documents in parallel. Optionally runs spaCy as a baseline.
 
 ```bash
-make ingest
+python -m scripts.02_run_extraction                          # default: 500 docs, 4 workers
+python -m scripts.02_run_extraction --limit 200 --workers 4  # faster run
+python -m scripts.02_run_extraction --limit 500 --skip-spacy # skip spaCy baseline
 ```
 
-**What it does**
+| Flag | Default | Description |
+|---|---|---|
+| `--limit` | 500 | Max documents to process |
+| `--workers` | 4 | ThreadPoolExecutor parallelism (max 8 recommended) |
+| `--skip-spacy` | False | Skip the optional spaCy NER baseline |
 
-1. **Ingest** — HuggingFace → `gs://<GCS_BUCKET>/raw/documents.jsonl` → BigQuery `documents`
-2. **Preprocess** — filter English, token length 100–5000, dedupe by hash → BigQuery `documents_clean`
+**What happens:**
+- Cloud NL API → entities + salience + sentiment + IAB categories → BigQuery `nlp_demo.entities`
+- Gemini 1.5 Pro → `core_issue`, `actors`, `key_metrics`, `dates`, `sentiment_label` → BigQuery `nlp_demo.extractions_gemini`
+- (Optional) spaCy `en_core_web_sm` → NER baseline rows appended to `nlp_demo.entities`
 
-The first run downloads the dataset from HuggingFace (network required; may take several minutes).
+---
 
-### Later pipeline steps (not yet implemented)
+### Step 3 — Summarize
 
-These Makefile targets will be added as scripts land:
+Generates TL;DR, bullet points, and abstract summaries for each document using Gemini 1.5 Pro.
 
 ```bash
-make extract      # scripts/02_run_extraction
-make summarize    # scripts/03_run_summarization
-make evaluate     # scripts/04_run_evaluation
-make agent-demo   # scripts/05_agent_demo
+python -m scripts.03_run_summarization                          # default: 500 docs, 4 workers
+python -m scripts.03_run_summarization --limit 200 --workers 4
 ```
 
-## Development
+| Flag | Default | Description |
+|---|---|---|
+| `--limit` | 500 | Max documents to summarize |
+| `--workers` | 4 | ThreadPoolExecutor parallelism |
+
+**What happens:**
+- Gemini 1.5 Pro produces `tldr` (1 sentence), `bullets` (3 points), `abstract` (75 words) per doc
+- Long documents (>16k chars) go through map-reduce: chunk → summarize each → reduce
+- Results → BigQuery `nlp_demo.summaries`
+
+---
+
+### Step 4 — Evaluate
+
+Computes ROUGE-1/2/L scores comparing Gemini (abstractive) vs TextRank (extractive) against CNN/DM reference summaries.
 
 ```bash
-make lint    # ruff
-make fmt     # black
-make test    # pytest (when tests/ exists)
+python -m scripts.04_run_evaluation             # default: 100-doc sample
+python -m scripts.04_run_evaluation --sample 50
 ```
 
-Never commit `.env` or `*-key.json` files.
+**What happens:**
+- Runs both summarizers on a sample of documents
+- Computes macro-averaged ROUGE scores
+- Prints a comparison table
+- Writes per-doc scores → BigQuery `nlp_demo.evaluation_results`
+
+**Example output:**
+```
+=======================================================
+ ROUGE Results  (n=100 documents)
+=======================================================
+  Model           ROUGE-1   ROUGE-2   ROUGE-L
+  ------------------------------------------
+  Gemini            0.382     0.162     0.251
+  TextRank          0.441     0.208     0.389
+=======================================================
+```
+
+---
+
+### Step 5 — EDA Notebook
+
+Open the exploratory analysis notebook after Step 1 completes:
+
+```bash
+jupyter notebook notebooks/01_eda.ipynb
+```
+
+Reads from BigQuery `documents_clean` and produces:
+- Token/sentence length distributions
+- Top 20 unigrams and bigrams
+- Vocabulary size and type-token ratio
+- Reference summary length distribution
+- 5 sample document previews
+
+Charts are saved to `docs/` for use in the report.
+
+---
+
+## 4. Agent Demo
+
+Run the interactive Research Insight Agent REPL. Requires Steps 1–3 to have completed so the corpus, entities, and summaries are available in BigQuery and Firestore.
+
+```bash
+python -m scripts.05_agent_demo
+```
+
+Resume a previous session:
+```bash
+python -m scripts.05_agent_demo --session <session-id>
+```
+
+**Sample queries to try:**
+```
+Find articles about climate change and list the top 5 entities mentioned.
+Summarise the most relevant article about the US economy.
+Compare coverage of healthcare across 3 articles and highlight common themes.
+Find articles about elections and show the sentiment distribution of entities.
+```
+
+**Example trace output:**
+```
+You: Find articles about climate change and list the top entities
+
+──────────────────────────────────────────────────────────────
+  Agent reasoning:
+──────────────────────────────────────────────────────────────
+
+  ┌─ Step 1 ── search_documents
+  │  Args        : {"query": "climate change", "top_k": 5}
+  │  Observation : {"results": [{"doc_id": "abc-123", "snippet": "..."}, ...]}
+  └──────────────────────────────────────────────────────────
+
+  ┌─ Step 2 ── extract_entities
+  │  Args        : {"doc_id": "abc-123"}
+  │  Observation : {"entities": [{"name": "UN", "type": "ORGANIZATION", ...}]}
+  └──────────────────────────────────────────────────────────
+
+  ┌─ Step 3 ── aggregate_entities
+  │  Args        : {"doc_ids": ["abc-123", ...], "top_n": 5}
+  │  Observation : {"top_entities": [...], "sentiment_distribution": {...}}
+  └──────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+  Agent:
+──────────────────────────────────────────────────────────────
+
+Across 5 articles about climate change, the most frequently
+mentioned entities are: ...
+
+Sources: abc-123, def-456, ghi-789
+```
+
+---
+
+## 5. Development
+
+```bash
+make lint    # ruff check (zero issues enforced)
+make fmt     # black formatting
+make test    # pytest tests/
+```
+
+**Pre-commit hooks** (installed via `make setup`) run ruff, black, and a private-key detector on every commit.
+
+**Cost tips:**
+- Use `--limit 50` on first runs to verify GCP connectivity before full-scale processing
+- Gemini Flash is used for bulk extraction/summarization; Pro is reserved for the agent planner
+- Firestore and BQ caching mean re-running the agent on the same documents costs zero incremental API calls
+
+---
+
+## 6. Project Structure
+
+```
+├── config/
+│   ├── settings.py              # Pydantic settings loaded from .env
+│   └── prompts/
+│       ├── entity_extraction.yaml
+│       ├── summarization.yaml
+│       └── agent_system.yaml
+├── notebooks/
+│   └── 01_eda.ipynb             # Corpus EDA — run after Step 1
+├── src/
+│   ├── data/                    # Ingest, preprocess, BQ schemas
+│   ├── extraction/              # Cloud NL API + Gemini + spaCy extractors
+│   ├── summarization/           # Gemini summarizer + TextRank + ROUGE evaluator
+│   ├── agent/                   # ReAct agent, 5 tools, Firestore memory, planner
+│   ├── gcp/                     # GCS, BQ, Firestore, Vertex AI client wrappers
+│   └── utils/                   # Structured logging, tenacity retry decorator
+├── scripts/
+│   ├── 01_ingest_data.py        # HuggingFace → GCS → BigQuery
+│   ├── 02_run_extraction.py     # Cloud NL API + Gemini extraction (parallel)
+│   ├── 03_run_summarization.py  # Gemini summarization (parallel)
+│   ├── 04_run_evaluation.py     # ROUGE evaluation: Gemini vs TextRank
+│   └── 05_agent_demo.py         # Interactive agent REPL
+├── infra/
+│   ├── terraform/               # GCP infrastructure as code (stubs)
+│   ├── pipelines/               # Vertex AI Pipelines KFP DAG (stub)
+│   └── cloud_run/               # Dockerfile + FastAPI app for production serving
+├── docs/
+│   ├── REPORT.md / REPORT.pdf   # Architecture & Agent Design Report
+│   └── eda_*.png                # EDA charts (generated by notebook)
+├── tests/                       # Unit tests with mocked GCP clients
+├── .env.example                 # Config template — copy to .env and fill in values
+├── requirements.txt
+├── Makefile
+└── pyproject.toml               # ruff + black + pytest config
+```
+
+---
+
+## GCP Resources Created
+
+| Resource | Name | Purpose |
+|---|---|---|
+| GCS Bucket | `<project-id>-nlp-corpus` | Raw JSONL landing zone |
+| BQ Dataset | `nlp_demo` | All structured data |
+| BQ Table | `nlp_demo.documents` | Raw ingested articles |
+| BQ Table | `nlp_demo.documents_clean` | Filtered/deduped articles |
+| BQ Table | `nlp_demo.entities` | Extracted entities (Cloud NL + spaCy) |
+| BQ Table | `nlp_demo.extractions_gemini` | Structured Gemini extraction results |
+| BQ Table | `nlp_demo.summaries` | TL;DR / bullets / abstract per doc |
+| BQ Table | `nlp_demo.evaluation_results` | Per-doc ROUGE scores |
+| Firestore | `sessions/{id}/turns` | Agent conversation history |
+| Firestore | `doc_cache/{doc_id}` | Extraction/summary cache |
