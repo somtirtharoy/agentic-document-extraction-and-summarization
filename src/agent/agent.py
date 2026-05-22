@@ -38,5 +38,5 @@ class Agent:
 
     def chat(self, session_id: str, message: str) -> str:
         """Send a message and return the agent's response."""
-        logger.info("User message", extra={"session_id": session_id, "message": message[:100]})
+        logger.info("User message", extra={"session_id": session_id, "user_message": message[:100]})
         return self._planner.run(session_id, message)

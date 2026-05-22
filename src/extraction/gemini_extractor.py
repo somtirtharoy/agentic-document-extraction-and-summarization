@@ -47,11 +47,11 @@ def _pydantic_to_vertex_schema(model: type[BaseModel]) -> dict:
 class GeminiExtractor:
     def __init__(self) -> None:
         settings = get_settings()
-        self._model = get_model(settings.gemini_model)
+        self._model = get_model(settings.gemini_model_flash)
         self._prompt = _load_prompt()
         self._generation_config = GenerationConfig(
             temperature=0.0,        # deterministic extraction
-            max_output_tokens=1024,
+            max_output_tokens=4096,
             response_mime_type="application/json",
             response_schema=_pydantic_to_vertex_schema(GeminiExtraction),
         )
